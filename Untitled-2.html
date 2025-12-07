@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Калькулятор для мини‑процессора</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  display: flex;
+  gap: 20px;
+}
+#editor {
+  width: 50%;
+}
+#sidePanel {
+  width: 45%;
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+#programInput {
+  width: 100%;
+  height: 150px;
+}
+#memoryDisplay {
+  white-space: pre;
+  background: #f0f0f0;
+  padding: 10px;
+  height: 250px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+button {
+  margin-top: 10px;
+}
+</style>
+</head>
+<body>
+
+<div id="editor">
+<h2>Код программы</h2>
+<textarea id="programInput" placeholder="Введите команды программы"></textarea>
+<button id="runBtn">Запустить</button>
+
+<h3>Результат:</h3>
+<div id="result"></div>
+</div>
+
+<div id="sidePanel">
+<h2>Память и регистры</h2>
+<div id="memoryDisplay"></div>
+
+<h3>Ввод числа:</h3>
+<input type="number" id="numberInput" disabled />
+<button id="submitNumber" disabled>Ввести и продолжить</button>
+</div>
+
+<script>
+const programInput = document.getElementById('programInput');
+const runBtn = document.getElementById('runBtn');
+const resultDiv = document.getElementById('result');
+const memoryDiv = document.getElementById('memoryDisplay');
+const numberInput = document.getElementById('numberInput');
+const submitNumberBtn = document.getElementById('submitNumber');
+
+// Инициализация регистров
+let registers = {};
+let program = [];
+let PC = 0; // счетчик команд
+let ACC = 0;
+let waitingForInput = false;
+let resolveInputPromise = null;
+
+// Инициализация регистров R1-R16
+for (let i = 1; i <= 16; i++) {
+  registers['R' + i] = 0;
+}
+
+// Обновление отображения памяти
+function updateMemory() {
+  let s = '';
+  for (let i = 1; i <= 16; i++) {
+    s += `R${i}: ${registers['R' + i]}\n`;
+  }
+  s += `ACC: ${ACC}\n`;
+  memoryDiv.textContent = s;
+}
+
+// Вывод сообщения
+function logMessage(msg) {
+  resultDiv.innerHTML = msg;
+}
+
+// Функция для ожидания ввода числа
+function waitForNumber(promptText) {
+  logMessage(promptText);
+  numberInput.value = '';
+  numberInput.disabled = false;
+  submitNumberBtn.disabled = false;
+
+  return new Promise(resolve => {
+    resolveInputPromise = resolve;
+  });
+}
+
+// Обработка нажатия кнопки для ввода числа
+submitNumberBtn.onclick = () => {
+  if (numberInput.value === '') return; // ничего не вводить
+  const num = parseInt(numberInput.value, 10);
+  if (isNaN(num)) {
+    alert('Пожалуйста, введите число');
+    return;
+  }
+  numberInput.disabled = true;
+  submitNumberBtn.disabled = true;
+  // Передача введенного числа в промис
+  resolveInputPromise(num);
+};
+
+// Обработка запуска программы
+runBtn.onclick = async () => {
+  // Сброс переменных
+  resultDiv.innerHTML = '';
+  for (let i = 1; i <= 16; i++) {
+    registers['R' + i] = 0;
+  }
+  ACC = 0;
+  updateMemory();
+
+  // Получение программы
+  const code = programInput.value;
+  program = code.split(/\r?\n/).map(line => line.trim()).filter(line => line !== '');
+
+  PC = 0;
+
+  let halted = false;
+  while (PC < program.length && !halted) {
+    const line = program[PC];
+    await executeLine(line);
+    PC++;
+    updateMemory();
+  }
+};
+
+// Основная функция исполнения команд
+async function executeLine(line) {
+  const parts = line.split(/\s+/);
+  const cmd = parts[0].toUpperCase();
+
+  switch (cmd) {
+    case 'MOV':
+      {
+        const reg = parts[1];
+        const val = parts.slice(2).join(' ');
+        if (!(reg in registers)) {
+          logMessage(`Некорректный регистр: ${reg}`);
+          return;
+        }
+        if (val.startsWith('R')) {
+          if (!(val in registers)) {
+            logMessage(`Некорректный источник: ${val}`);
+            return;
+          }
+          registers[reg] = registers[val];
+        } else {
+          const num = parseInt(val, 10);
+          if (isNaN(num)) {
+            logMessage(`Некорректное значение: ${val}`);
+            return;
+          }
+          registers[reg] = num;
+        }
+      }
+      break;
+    case 'ADD':
+      {
+        const reg = parts[1];
+        if (!(reg in registers)) {
+          logMessage(`Некорректный регистр: ${reg}`);
+          return;
+        }
+        ACC += registers[reg];
+      }
+      break;
+    case 'INPUT':
+      {
+        const reg = parts[1];
+        if (!(reg in registers)) {
+          logMessage(`Некорректный регистр: ${reg}`);
+          return;
+        }
+        const num = await waitForNumber(`Введите число для ${reg}:`);
+        registers[reg] = num;
+      }
+      break;
+    case 'PRINT':
+      {
+        const arg = parts.slice(1).join(' ');
+        if (arg.startsWith('R')) {
+          if (!(arg in registers)) {
+            logMessage(`Некорректный регистр: ${arg}`);
+            return;
+          }
+          logMessage(`${arg} = ${registers[arg]}`);
+        } else {
+          const num = parseInt(arg, 10);
+          if (isNaN(num)) {
+            logMessage(arg);
+          } else {
+            logMessage(num);
+          }
+        }
+      }
+      break;
+    case 'HALT':
+      logMessage('Выполнение завершено (HALT).');
+      PC = program.length; // остановка программы
+      break;
+    default:
+      logMessage(`Неизвестная команда: ${line}`);
+  }
+}
+</script>
+
+</body>
+</html>
