@@ -193,24 +193,27 @@ async function executeLine(line) {
       }
       break;
     case 'PRINT':
-      {
-        const arg = parts.slice(1).join(' ');
-        if (arg.startsWith('R')) {
-          if (!(arg in registers)) {
-            logMessage(`Некорректный регистр: ${arg}`);
-            return;
-          }
-          logMessage(`${arg} = ${registers[arg]}`);
-        } else {
-          const num = parseInt(arg, 10);
-          if (isNaN(num)) {
-            logMessage(arg);
-          } else {
-            logMessage(num);
-          }
-        }
+  {
+    const arg = parts.slice(1).join(' ').trim();
+
+    if (arg === 'ACC') {
+      logMessage(`ACC = ${ACC}`);
+    } else if (arg.startsWith('R')) {
+      if (!(arg in registers)) {
+        logMessage(`Некорректный регистр: ${arg}`);
+        return;
       }
-      break;
+      logMessage(`${arg} = ${registers[arg]}`);
+    } else {
+      const num = parseInt(arg, 10);
+      if (isNaN(num)) {
+        logMessage(arg);
+      } else {
+        logMessage(num);
+      }
+    }
+  }
+  break;
     case 'HALT':
       logMessage('Выполнение завершено (HALT).');
       PC = program.length; // остановка программы
@@ -223,3 +226,4 @@ async function executeLine(line) {
 
 </body>
 </html>
+
